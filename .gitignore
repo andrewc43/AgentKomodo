@@ -157,3 +157,28 @@ vicuna-*
 
 # mac
 .DS_Store
+
+
+# Local venv
+autogpt-env/
+
+# Agent workspace / runtime artifacts
+autogpt/auto_gpt_workspace/
+auto_gpt_workspace/
+workspace/
+agent_workspace/
+
+# Backups
+*.bak
+*_backup
+*_backup.*
+*_bak
+*.json.bak
+
+# Installer/downloaded packages
+*.deb
+
+# Local clones / vendor dirs
+vaderSentiment/
+vaderSentimentRepo/
+EOF
