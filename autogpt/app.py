@@ -3,7 +3,7 @@ import json
 from typing import List, NoReturn, Union
 from autogpt.agent.agent_manager import AgentManager
 from autogpt.commands.evaluate_code import evaluate_code
-from autogpt.commands.google_search import google_official_search, google_search
+from autogpt.commands.brave_search import brave_search
 from autogpt.commands.improve_code import improve_code
 from autogpt.commands.write_tests import write_tests
 from autogpt.config import Config
@@ -16,6 +16,7 @@ from autogpt.commands.file_operations import (
     read_file,
     search_files,
     write_to_file,
+    ingest_file,
 )
 from autogpt.json_fixes.parsing import fix_and_parse_json
 from autogpt.memory import get_memory
@@ -23,21 +24,16 @@ from autogpt.processing.text import summarize_text
 from autogpt.speech import say_text
 from autogpt.commands.web_selenium import browse_website
 from autogpt.commands.git_operations import clone_repository
-
+from autogpt.commands.run_python import run_python_file
+from autogpt.commands.merge_text_files import merge_text_files
+from autogpt.commands.run_shell import run_shell
+from autogpt.commands.conversational_summary import conversational_summary
 
 CFG = Config()
 AGENT_MANAGER = AgentManager()
 
 
 def is_valid_int(value: str) -> bool:
-    """Check if the value is a valid integer
-
-    Args:
-        value (str): The value to check
-
-    Returns:
-        bool: True if the value is a valid integer, False otherwise
-    """
     try:
         int(value)
         return True
@@ -46,249 +42,207 @@ def is_valid_int(value: str) -> bool:
 
 
 def get_command(response: str):
-    """Parse the response and return the command name and arguments
-
-    Args:
-        response (str): The response from the user
-
-    Returns:
-        tuple: The command name and arguments
-
-    Raises:
-        json.decoder.JSONDecodeError: If the response is not valid JSON
-
-        Exception: If any other error occurs
-    """
+    """Parse AI JSON response into command name and arguments."""
     try:
         response_json = fix_and_parse_json(response)
-
-        if "command" not in response_json:
-            return "Error:", "Missing 'command' object in JSON"
-
         if not isinstance(response_json, dict):
             return "Error:", f"'response_json' object is not dictionary {response_json}"
 
-        command = response_json["command"]
-        if not isinstance(command, dict):
-            return "Error:", "'command' object is not a dictionary"
+        command = response_json.get("command")
+        if not command or not isinstance(command, dict):
+            return "Error:", "'command' object missing or invalid"
 
-        if "name" not in command:
-            return "Error:", "Missing 'name' field in 'command' object"
-
-        command_name = command["name"]
-
-        # Use an empty dictionary if 'args' field is not present in 'command' object
+        command_name = command.get("name")
         arguments = command.get("args", {})
+
+        if not command_name:
+            return "Error:", "Missing 'name' in 'command' object"
 
         return command_name, arguments
     except json.decoder.JSONDecodeError:
         return "Error:", "Invalid JSON"
-    # All other errors, return "Error: + error message"
     except Exception as e:
         return "Error:", str(e)
 
 
 def map_command_synonyms(command_name: str):
-    """ Takes the original command name given by the AI, and checks if the
-        string matches a list of common/known hallucinations
-    """
     synonyms = [
         ('write_file', 'write_to_file'),
         ('create_file', 'write_to_file'),
-        ('search', 'google')
+        ('search', 'google'),
+        ('run_shell', 'execute_shell'),
+        ('merge_files', 'merge_text_files'),
     ]
-    for seen_command, actual_command_name in synonyms:
+    for seen_command, actual in synonyms:
         if command_name == seen_command:
-            return actual_command_name
+            return actual
     return command_name
 
 
-def execute_command(command_name: str, arguments):
-    """Execute the command and return the result
+def execute_command(command_name: str, arguments, user_input=""):
+    """
+    Executes a command by name. Supports streaming for conversational_summary.
 
-    Args:
-        command_name (str): The name of the command to execute
-        arguments (dict): The arguments for the command
-
-    Returns:
-        str: The result of the command"""
+    :param command_name: str
+    :param arguments: dict
+    :param user_input: str
+    :return: str or generator
+    """
     memory = get_memory(CFG)
 
+    # Auto-trigger conversational_summary based on user input
+    #if user_input and any(kw in user_input.lower() for kw in ["what did you learn", "explain"]):
+    #    command_name = "conversational_summary"
+    #    arguments = {"topic": user_input}
+
+    command_name = map_command_synonyms(command_name)
+
     try:
-        command_name = map_command_synonyms(command_name)
-        if command_name == "google":
-            # Check if the Google API key is set and use the official search method
-            # If the API key is not set or has only whitespaces, use the unofficial
-            # search method
-            key = CFG.google_api_key
-            if key and key.strip() and key != "your-google-api-key":
-                google_result = google_official_search(arguments["input"])
-            else:
-                google_result = google_search(arguments["input"])
-            safe_message = google_result.encode('utf-8', 'ignore')
-            return str(safe_message)
-        elif command_name == "memory_add":
-            return memory.add(arguments["string"])
-        elif command_name == "start_agent":
-            return start_agent(
-                arguments["name"], arguments["task"], arguments["prompt"]
-            )
-        elif command_name == "message_agent":
-            return message_agent(arguments["key"], arguments["message"])
-        elif command_name == "list_agents":
-            return list_agents()
-        elif command_name == "delete_agent":
-            return delete_agent(arguments["key"])
-        elif command_name == "get_text_summary":
-            return get_text_summary(arguments["url"], arguments["question"])
-        elif command_name == "get_hyperlinks":
-            return get_hyperlinks(arguments["url"])
-        elif command_name == "clone_repository":
-            return clone_repository(arguments["repository_url"], arguments["clone_path"])
-        elif command_name == "read_file":
+        # ------------------------- COMMAND ROUTING -------------------------
+        #if command_name == "conversational_summary":
+        #    response = conversational_summary(prompt=arguments.get("prompt", ""), memory=memory)
+            # Stream if generator
+        #    if hasattr(response, "__iter__") and not isinstance(response, str):
+        #        for part in response:
+        #            print(part, flush=True)
+        #            yield part
+        #    else:
+        #        return response
+
+        if command_name == "read_file":
             return read_file(arguments["file"])
+
         elif command_name == "write_to_file":
             return write_to_file(arguments["file"], arguments["text"])
+
         elif command_name == "append_to_file":
             return append_to_file(arguments["file"], arguments["text"])
+
         elif command_name == "delete_file":
             return delete_file(arguments["file"])
+
         elif command_name == "search_files":
-            return search_files(arguments["directory"])
-        elif command_name == "browse_website":
-            return browse_website(arguments["url"], arguments["question"])
-        # TODO: Change these to take in a file rather than pasted code, if
-        # non-file is given, return instructions "Input should be a python
-        # filepath, write your code to file and try again"
-        elif command_name == "evaluate_code":
-            return evaluate_code(arguments["code"])
-        elif command_name == "improve_code":
-            return improve_code(arguments["suggestions"], arguments["code"])
-        elif command_name == "write_tests":
-            return write_tests(arguments["code"], arguments.get("focus"))
-        elif command_name == "execute_python_file":  # Add this command
-            return execute_python_file(arguments["file"])
-        elif command_name == "execute_shell":
-            if CFG.execute_local_commands:
-                return execute_shell(arguments["command_line"])
-            else:
-                return (
-                    "You are not allowed to run local shell commands. To execute"
-                    " shell commands, EXECUTE_LOCAL_COMMANDS must be set to 'True' "
-                    "in your config. Do not attempt to bypass the restriction."
-                )
+            return search_files(arguments.get("directory", ""))
+
+        elif command_name == "ingest_file":
+            return ingest_file(arguments["file"], memory)
+
+        elif command_name == "merge_text_files":
+            return merge_text_files(arguments["folder"], arguments["output"])
+
+        elif command_name == "clone_repository":
+            return clone_repository(arguments["repository_url"], arguments["clone_path"])
+
         elif command_name == "generate_image":
             return generate_image(arguments["prompt"])
+
+        elif command_name == "execute_python_file":
+            return run_python_file(arguments["file"])
+
+        elif command_name == "execute_shell":
+            if CFG.execute_local_commands:
+                return run_shell(arguments["command_line"])
+            else:
+                return "Local shell execution not allowed. Set CFG.execute_local_commands=True to enable."
+
+        elif command_name == "browse_website":
+            url = arguments.get("url")
+            # If URL is still a placeholder, try fetching latest search URL from memory
+            if url == "<url_from_search_results>" or not url:
+                search_entries = memory.search(["search"])
+                if search_entries:
+                    # Take the last URL from the latest search memory entry
+                    last_entry_text = search_entries[-1]["content"]
+                    url = last_entry_text.split("\n")[-1]  # last URL
+                    arguments["url"] = url
+
+            return browse_website(url, arguments.get("question", ""))
+
+        elif command_name == "evaluate_code":
+            return evaluate_code(arguments["code"])
+
+        elif command_name == "improve_code":
+            return improve_code(arguments["suggestions"], arguments["code"])
+
+        elif command_name == "write_tests":
+            return write_tests(arguments["code"], arguments.get("focus"))
+
+        elif command_name == "google":
+            search_results_raw = brave_search(arguments["input"])
+            try:
+                search_results = json.loads(search_results_raw)
+            except json.JSONDecodeError:
+                search_results = []
+            urls = [r["url"] for r in search_results if "url" in r]
+            if urls:
+                memory.add(
+                    text=f"Search results for '{arguments['input']}':\n" + "\n".join(urls),
+                    tags=["action", "search"]
+                )
+            return urls
+        elif command_name == "memory_add":
+            return memory.add(arguments["string"])
+
         elif command_name == "do_nothing":
             return "No action performed."
+
         elif command_name == "task_complete":
             shutdown()
+
         else:
-            return (
-                f"Unknown command '{command_name}'. Please refer to the 'COMMANDS'"
-                " list for available commands and only respond in the specified JSON"
-                " format."
-            )
+            return f"Unknown command '{command_name}'."
+
     except Exception as e:
         return f"Error: {str(e)}"
 
 
 def get_text_summary(url: str, question: str) -> str:
-    """Return the results of a google search
-
-    Args:
-        url (str): The url to scrape
-        question (str): The question to summarize the text for
-
-    Returns:
-        str: The summary of the text
-    """
     text = scrape_text(url)
     summary = summarize_text(url, text, question)
-    return f""" "Result" : {summary}"""
+    return f"Result: {summary}"
 
 
 def get_hyperlinks(url: str) -> Union[str, List[str]]:
-    """Return the results of a google search
-
-    Args:
-        url (str): The url to scrape
-
-    Returns:
-        str or list: The hyperlinks on the page
-    """
     return scrape_links(url)
 
 
 def shutdown() -> NoReturn:
-    """Shut down the program"""
     print("Shutting down...")
     quit()
 
 
 def start_agent(name: str, task: str, prompt: str, model=CFG.fast_llm_model) -> str:
-    """Start an agent with a given name, task, and prompt
-
-    Args:
-        name (str): The name of the agent
-        task (str): The task of the agent
-        prompt (str): The prompt for the agent
-        model (str): The model to use for the agent
-
-    Returns:
-        str: The response of the agent
-    """
-    # Remove underscores from name
     voice_name = name.replace("_", " ")
-
-    first_message = f"""You are {name}.  Respond with: "Acknowledged"."""
+    first_message = f"You are {name}. Respond with: 'Acknowledged'."
     agent_intro = f"{voice_name} here, Reporting for duty!"
 
-    # Create agent
     if CFG.speak_mode:
-        say_text(agent_intro, 1)
+        say_text(agent_intro)
+
     key, ack = AGENT_MANAGER.create_agent(task, first_message, model)
 
     if CFG.speak_mode:
-        say_text(f"Hello {voice_name}. Your task is as follows. {task}.")
+        say_text(f"Hello {voice_name}. Your task is: {task}.")
 
-    # Assign task (prompt), get response
     agent_response = AGENT_MANAGER.message_agent(key, prompt)
 
     return f"Agent {name} created with key {key}. First response: {agent_response}"
 
 
 def message_agent(key: str, message: str) -> str:
-    """Message an agent with a given key and message"""
-    # Check if the key is a valid integer
     if is_valid_int(key):
         agent_response = AGENT_MANAGER.message_agent(int(key), message)
     else:
         return "Invalid key, must be an integer."
-
-    # Speak response
     if CFG.speak_mode:
-        say_text(agent_response, 1)
+        say_text(agent_response)
     return agent_response
 
 
 def list_agents():
-    """List all agents
-
-    Returns:
-        str: A list of all agents
-    """
     return "List of agents:\n" + "\n".join([str(x[0]) + ": " + x[1] for x in AGENT_MANAGER.list_agents()])
 
 
 def delete_agent(key: str) -> str:
-    """Delete an agent with a given key
-
-    Args:
-        key (str): The key of the agent to delete
-
-    Returns:
-        str: A message indicating whether the agent was deleted or not
-    """
     result = AGENT_MANAGER.delete_agent(key)
     return f"Agent {key} deleted." if result else f"Agent {key} does not exist."

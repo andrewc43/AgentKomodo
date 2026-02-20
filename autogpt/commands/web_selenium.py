@@ -41,7 +41,6 @@ def browse_website(url: str, question: str) -> Tuple[str, WebDriver]:
     close_browser(driver)
     return f"Answer gathered from website: {summary_text} \n \n Links: {links}", driver
 
-
 def scrape_text_with_selenium(url: str) -> Tuple[WebDriver, str]:
     """Scrape text from a website using selenium
 
@@ -69,9 +68,20 @@ def scrape_text_with_selenium(url: str) -> Tuple[WebDriver, str]:
         # See https://developer.apple.com/documentation/webkit/testing_with_webdriver_in_safari
         driver = webdriver.Safari(options=options)
     else:
-        driver = webdriver.Chrome(
-            executable_path=ChromeDriverManager().install(), options=options
-        )
+        from selenium.webdriver.chrome.service import Service
+        from selenium.webdriver.chrome.options import Options
+        from webdriver_manager.chrome import ChromeDriverManager
+
+        options = Options()
+        options.headless = True  # keep True for headless mode
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
+
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
+
     driver.get(url)
 
     WebDriverWait(driver, 10).until(
@@ -158,3 +168,4 @@ def add_header(driver: WebDriver) -> None:
         None
     """
     driver.execute_script(open(f"{FILE_DIR}/js/overlay.js", "r").read())
+

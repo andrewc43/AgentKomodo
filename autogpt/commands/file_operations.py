@@ -4,6 +4,7 @@ import os.path
 from pathlib import Path
 from typing import Generator, List
 
+READ_PROGRESS = {}
 # Set a dedicated folder for file I/O
 WORKING_DIRECTORY = Path(__file__).parent.parent / "auto_gpt_workspace"
 
@@ -59,23 +60,47 @@ def split_file(
         yield chunk
         start += max_length - overlap
 
-
-def read_file(filename: str) -> str:
-    """Read a file and return the contents
-
-    Args:
-        filename (str): The name of the file to read
-
-    Returns:
-        str: The contents of the file
+def read_file(filename: str, chunk_size: int = 4000) -> str:
+    """Read a file progressively in chunks.
+    Remembers progress between calls.
+    Returns next chunk each time until EOF.
     """
+
     try:
         filepath = safe_join(WORKING_DIRECTORY, filename)
-        with open(filepath, "r", encoding="utf-8") as f:
-            content = f.read()
-        return content
+
+        if not os.path.exists(filepath):
+            return f"Error: File '{filename}' does not exist."
+
+        file_size = os.path.getsize(filepath)
+
+        # Initialize progress if first time
+        if filename not in READ_PROGRESS:
+            READ_PROGRESS[filename] = 0
+
+        start = READ_PROGRESS[filename]
+
+        if start >= file_size:
+            # Reset progress after finishing
+            READ_PROGRESS.pop(filename, None)
+            return "[END OF FILE]"
+
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            f.seek(start)
+            content = f.read(chunk_size)
+
+        next_position = start + len(content)
+        READ_PROGRESS[filename] = next_position
+
+        return (
+            f"[FILE CHUNK]\n"
+            f"Progress: {next_position}/{file_size} bytes\n\n"
+            f"{content}"
+        )
+
     except Exception as e:
         return f"Error: {str(e)}"
+
 
 
 def ingest_file(

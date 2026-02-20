@@ -40,6 +40,8 @@ def generate_context(prompt, relevant_memory, full_message_history, model):
     next_message_to_add_index = len(full_message_history) - 1
     insertion_index = len(current_context)
     # Count the currently used tokens
+    print("Context message count:", len(current_context))
+    print("First message preview:", str(current_context[0])[:200])
     current_tokens_used = token_counter.count_message_tokens(current_context, model)
     return (
         next_message_to_add_index,
@@ -79,11 +81,19 @@ def chat_with_ai(
             logger.debug(f"Token limit: {token_limit}")
             send_token_limit = token_limit - 1000
 
-            relevant_memory = (
-                ""
-                if len(full_message_history) == 0
-                else permanent_memory.get_relevant(str(full_message_history[-9:]), 10)
-            )
+            # relevant_memory = (
+            #    ""
+            #    if len(full_message_history) == 0
+            #    else permanent_memory.get_relevant(str(full_message_history[-9:]), 10)
+            #)
+            try:
+                # Combine the last 9 messages’ content into a plain text string
+                last_messages_text = " ".join(msg["content"] for msg in full_message_history[-9:])
+                relevant_memory = permanent_memory.get_relevant(last_messages_text, 10)
+            except Exception as e:
+                logger.error(f"Error fetching relevant memory: {e}")
+                relevant_memory = []
+
 
             logger.debug(f"Memory Stats: {permanent_memory.get_stats()}")
 

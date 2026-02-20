@@ -24,7 +24,7 @@ def count_message_tokens(
     try:
         encoding = tiktoken.encoding_for_model(model)
     except KeyError:
-        logger.warn("Warning: model not found. Using cl100k_base encoding.")
+        # logger.warn("Warning: model not found. Using cl100k_base encoding.")
         encoding = tiktoken.get_encoding("cl100k_base")
     if model == "gpt-3.5-turbo":
         # !Note: gpt-3.5-turbo may change over time.
@@ -39,6 +39,9 @@ def count_message_tokens(
         )
         tokens_per_name = -1  # if there's a name, the role is omitted
     elif model == "gpt-4-0314":
+        tokens_per_message = 3
+        tokens_per_name = 1
+    elif model in ["gpt-4o", "gpt-4.1", "gpt-4o-mini"]:
         tokens_per_message = 3
         tokens_per_name = 1
     else:
