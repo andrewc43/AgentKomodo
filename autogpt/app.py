@@ -99,17 +99,13 @@ def execute_command(command_name: str, arguments, user_input=""):
 
     try:
         # ------------------------- COMMAND ROUTING -------------------------
-        #if command_name == "conversational_summary":
-        #    response = conversational_summary(prompt=arguments.get("prompt", ""), memory=memory)
-            # Stream if generator
-        #    if hasattr(response, "__iter__") and not isinstance(response, str):
-        #        for part in response:
-        #            print(part, flush=True)
-        #            yield part
-        #    else:
-        #        return response
+        if command_name == "conversational_summary":
+            return conversational_summary(
+                prompt=arguments.get("prompt", ""),
+                memory=memory,
+            )
 
-        if command_name == "read_file":
+        elif command_name == "read_file":
             return read_file(arguments["file"])
 
         elif command_name == "write_to_file":

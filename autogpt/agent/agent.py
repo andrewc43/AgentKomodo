@@ -76,6 +76,7 @@ class Agent:
                 response = conversational_summary(
                     prompt=self.user_input,
                     memory=self.memory,
+                    full_message_history=self.full_message_history,
                     conversational_mode=True  # Skip file writing, only summarize memory
                 )
                 if hasattr(response, "__iter__") and not isinstance(response, str):
