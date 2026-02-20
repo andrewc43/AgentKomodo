@@ -10,6 +10,8 @@ from autogpt.spinner import Spinner
 from autogpt.utils import clean_input
 from autogpt.commands.conversational_summary import conversational_summary
 from collections.abc import Iterator
+import hashlib
+import json
 
 
 class Agent:

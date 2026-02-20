@@ -88,6 +88,7 @@ class LocalCache(MemoryProviderSingleton):
             if any(word in text.lower() for word in ["essay", "report", "article", "story"]):
                 tags.append("in-progress")
 
+        content_hash = _hash_text(text)
         memory_entry = {
             "id": task_id or f"action_{len(self.data.texts)}_{int(datetime.utcnow().timestamp())}",
             "tags": tags,
@@ -95,7 +96,7 @@ class LocalCache(MemoryProviderSingleton):
             "content": text,
             "hash": content_hash,
         }
-        content_hash = _hash_text(text)
+
         # Dedupe: if we've already stored this exact content, skip
         for e in self.data.texts[-50:]:  # scan recent entries only (cheap)
             if e.get("hash") == content_hash:

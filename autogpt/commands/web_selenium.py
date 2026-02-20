@@ -105,15 +105,15 @@ def scrape_text_with_selenium(url: str) -> Tuple[WebDriver, str]:
 
     # Get the HTML content directly from the browser's DOM
     page_source = driver.execute_script("return document.body.outerHTML;")
-    soup = BeautifulSoup(page_source, "html.parser")
+    soup = BeautifulSoup(page_source, "lxml")
 
-    for script in soup(["script", "style"]):
-        script.extract()
+    # Remove non-content elements once
+    for tag in soup(["script", "style", "noscript"]):
+        tag.decompose()
 
-    text = soup.get_text()
-    lines = (line.strip() for line in text.splitlines())
-    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-    text = "\n".join(chunk for chunk in chunks if chunk)
+    # Extract readable text with sane whitespace
+    text = soup.get_text(separator="\n", strip=True)
+
     return driver, text
 
 

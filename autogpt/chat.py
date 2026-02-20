@@ -40,8 +40,6 @@ def generate_context(prompt, relevant_memory, full_message_history, model):
     next_message_to_add_index = len(full_message_history) - 1
     insertion_index = len(current_context)
     # Count the currently used tokens
-    print("Context message count:", len(current_context))
-    print("First message preview:", str(current_context[0])[:200])
     current_tokens_used = token_counter.count_message_tokens(current_context, model)
     return (
         next_message_to_add_index,

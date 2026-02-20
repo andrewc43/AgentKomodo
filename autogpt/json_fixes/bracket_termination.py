@@ -18,7 +18,7 @@ def attempt_to_fix_json_by_finding_outermost_brackets(json_string: str):
             "I have received an invalid JSON response from the OpenAI API. "
             "Trying to fix it now."
         )
-    logger.typewriter_log("Attempting to fix JSON by finding outermost brackets\n")
+    # logger.typewriter_log("Attempting to fix JSON by finding outermost brackets\n")
 
     try:
         json_pattern = regex.compile(r"\{(?:[^{}]|(?R))*\}")
@@ -27,11 +27,12 @@ def attempt_to_fix_json_by_finding_outermost_brackets(json_string: str):
         if json_match:
             # Extract the valid JSON object from the string
             json_string = json_match.group(0)
-            logger.typewriter_log(
-                title="Apparently json was fixed.", title_color=Fore.GREEN
-            )
+            #logger.typewriter_log(
+            #    title="Apparently json was fixed.", title_color=Fore.GREEN
+            #)
             if CFG.speak_mode and CFG.debug_mode:
-                say_text("Apparently json was fixed.")
+                #say_text("Apparently json was fixed.")
+                pass
         else:
             raise ValueError("No valid JSON object found")
 
