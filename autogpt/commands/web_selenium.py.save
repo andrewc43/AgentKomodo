@@ -15,44 +15,11 @@ import logging
 from pathlib import Path
 from autogpt.config import Config
 from typing import List, Tuple, Union
-import concurrent.futures
-
 
 FILE_DIR = Path(__file__).parent.parent
 CFG = Config()
 
 
-def browse_website(url: str, question: str) -> str:
-    """Browse a website and return an answer + a few links."""
-    driver: WebDriver | None = None
-    try:
-        driver, text = scrape_text_with_selenium(url)
-
-        # Optional overlay, but don't fail if missing or blocked
-        try:
-            add_header(driver)
-        except Exception:
-            pass
-
-        summary_text = summary.summarize_text(url, text, question, driver)
-
-        links: List[str] = []
-        try:
-            links = _with_timeout(lambda: scrape_links_with_selenium(driver)[:5], timeout_s=5, default=[])
-        except Exception:
-            links = []
-
-        return (
-            f"Answer gathered from website: {summary_text}\n\n"
-            f"Links: {links}"
-        )
-
-    finally:
-        if driver is not None:
-            try:
-                close_browser(driver)
-            except Exception:
-                pass
 
 def scrape_text_with_selenium(url: str) -> Tuple[WebDriver, str]:
     """Scrape text from a website using selenium
@@ -94,8 +61,6 @@ def scrape_text_with_selenium(url: str) -> Tuple[WebDriver, str]:
 
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
-        driver.set_page_load_timeout(20)
-        driver.set_script_timeout(20)
 
     driver.get(url)
 
@@ -146,19 +111,7 @@ def close_browser(driver: WebDriver) -> None:
     Returns:
         None
     """
-    def _quit():
-        try:
-            driver.quit()
-        except Exception:
-            pass
-
-    # Quit in a thread and don't let it block forever
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-        fut = ex.submit(_quit)
-        try:
-            fut.result(timeout=3)
-        except Exception:
-            pass
+    driver.quit()
 
 
 def extract_hyperlinks(soup: BeautifulSoup) -> List[Tuple[str, str]]:
@@ -196,10 +149,3 @@ def add_header(driver: WebDriver) -> None:
     """
     driver.execute_script(open(f"{FILE_DIR}/js/overlay.js", "r").read())
 
-def _with_timeout(fn, timeout_s: int, default):
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-        fut = ex.submit(fn)
-        try:
-            return fut.result(timeout=timeout_s)
-        except Exception:
-            return default

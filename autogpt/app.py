@@ -153,7 +153,11 @@ def execute_command(command_name: str, arguments, user_input=""):
                 if search_entries:
                     # Take the last URL from the latest search memory entry
                     last_entry_text = search_entries[-1]["content"]
-                    url = last_entry_text.split("\n")[-1]  # last URL
+                    candidate = last_entry_text.split("\n")[-1].strip()
+                    if candidate.startswith("http"):
+                        url = candidate
+                    else:
+                        return "Error: No valid URL found in memory. Please run search again and provide a URL."
                     arguments["url"] = url
 
             return browse_website(url, arguments.get("question", ""))

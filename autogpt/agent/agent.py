@@ -9,6 +9,8 @@ from autogpt.speech import say_text
 from autogpt.spinner import Spinner
 from autogpt.utils import clean_input
 from autogpt.commands.conversational_summary import conversational_summary
+from collections.abc import Iterator
+
 
 class Agent:
     """Agent class for interacting with Auto-GPT."""
@@ -27,6 +29,23 @@ class Agent:
         loop_count = 0
         command_name = None
         arguments = None
+        if not hasattr(self, "_recent_commands"):
+            self._recent_commands = []
+
+        sig = (
+            command_name,
+            hashlib.md5(json.dumps(arguments, sort_keys=True).encode()).hexdigest()
+        )
+
+        self._recent_commands.append(sig)
+        self._recent_commands = self._recent_commands[-6:]
+
+        if self._recent_commands.count(sig) >= 3:
+            print("[loop guard] Detected repeated command. Forcing strategy shift.")
+            self.full_message_history.append({
+                "role": "system",
+                "content": "Loop detected. You have repeated the same command multiple times. Change strategy or request user input."
+            })
 
         while True:
             loop_count += 1
@@ -140,7 +159,8 @@ class Agent:
                 cmd_result = execute_command(command_name, arguments, user_input=self.user_input)
 
                 # NEW: handle generators for streaming output
-                if hasattr(cmd_result, "__iter__") and not isinstance(cmd_result, str):
+                is_stream = isinstance(cmd_result, Iterator) and not isinstance(cmd_result, (str, bytes))
+                if is_stream:
                     result_text = ""
                     for chunk in cmd_result:
                         print(chunk, flush=True)  # stream to console
